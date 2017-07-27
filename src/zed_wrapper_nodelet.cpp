@@ -48,6 +48,7 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <geometry_msgs/TransformStamped.h>
+#include <geometry_msgs/PoseStamped.h>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -84,6 +85,7 @@ namespace zed_wrapper {
         ros::Publisher pub_right_cam_info;
         ros::Publisher pub_depth_cam_info;
         ros::Publisher pub_odom;
+        ros::Publisher pub_pose;
 
         // tf
         tf2_ros::TransformBroadcaster transform_odom_broadcaster;
@@ -223,6 +225,12 @@ namespace zed_wrapper {
             odom.pose.pose.orientation.z = -quat(1);
             odom.pose.pose.orientation.w = quat(3);
             pub_odom.publish(odom);
+
+            geometry_msgs::PoseStamped pose_stamped;
+            pose_stamped.header.stamp = t;
+            pose_stamped.header.frame_id = odom_frame_id;
+            pose_stamped.pose = odom.pose.pose;
+            pub_pose.publish(pose_stamped);
         }
 
         /* \brief Publish the pose of the camera as a transformation
@@ -437,7 +445,8 @@ namespace zed_wrapper {
                 int depth_SubNumber = pub_depth.getNumSubscribers();
                 int cloud_SubNumber = pub_cloud.getNumSubscribers();
                 int odom_SubNumber = pub_odom.getNumSubscribers();
-                bool runLoop = (rgb_SubNumber + rgb_raw_SubNumber + left_SubNumber + left_raw_SubNumber + right_SubNumber + right_raw_SubNumber + depth_SubNumber + cloud_SubNumber + odom_SubNumber) > 0;
+                int pose_SubNumber = pub_pose.getNumSubscribers();
+                bool runLoop = (rgb_SubNumber + rgb_raw_SubNumber + left_SubNumber + left_raw_SubNumber + right_SubNumber + right_raw_SubNumber + depth_SubNumber + cloud_SubNumber + odom_SubNumber + pose_SubNumber) > 0;
 
 
                 runParams.enable_point_cloud = false;
@@ -445,18 +454,18 @@ namespace zed_wrapper {
                     runParams.enable_point_cloud = true;
                 // Run the loop only if there is some subscribers
                 if (runLoop) {
-                    if (odom_SubNumber > 0 && !tracking_activated) { //Start the tracking
+                    if ((odom_SubNumber > 0 || pose_SubNumber > 0) && !tracking_activated) { //Start the tracking
                         if (odometry_DB != "" && !file_exist(odometry_DB)) {
                             odometry_DB = "";
                             NODELET_WARN("odometry_DB path doesn't exist or is unreachable.");
                         }
                         zed->enableTracking(trackParams);
                         tracking_activated = true;
-                    } else if (odom_SubNumber == 0 && tracking_activated) { //Stop the tracking
+                    } else if (odom_SubNumber == 0 && pose_SubNumber == 0 && tracking_activated) { //Stop the tracking
                         zed->disableTracking();
                         tracking_activated = false;
                     }
-                    computeDepth = (depth_SubNumber + cloud_SubNumber + odom_SubNumber) > 0; // Detect if one of the subscriber need to have the depth information
+                    computeDepth = (depth_SubNumber + cloud_SubNumber + odom_SubNumber + pose_SubNumber) > 0; // Detect if one of the subscriber need to have the depth information
                     ros::Time t = ros::Time::now(); // Get current time
 
                     grabbing = true;
@@ -486,7 +495,7 @@ namespace zed_wrapper {
                                 std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                             }
                             tracking_activated = false;
-                            if (odom_SubNumber > 0) { //Start the tracking
+                            if (odom_SubNumber > 0 || pose_SubNumber > 0) { //Start the tracking
                                 if (odometry_DB != "" && !file_exist(odometry_DB)) {
                                     odometry_DB = "";
                                     NODELET_WARN("odometry_DB path doesn't exist or is unreachable.");
@@ -566,7 +575,7 @@ namespace zed_wrapper {
                     }
 
                     // Publish the odometry if someone has subscribed to
-                    if (odom_SubNumber > 0) {
+                    if (odom_SubNumber > 0 || pose_SubNumber > 0) {
                         zed->getPosition(pose);
                         publishOdom(pose, pub_odom, odometry_frame_id, t);
                     }
@@ -628,6 +637,7 @@ namespace zed_wrapper {
             string odometry_topic = "odom";
             odometry_frame_id = "/zed_initial_frame";
             odometry_transform_frame_id = "/zed_current_frame";
+            string pose_topic = "pose";
 
             nh = getMTNodeHandle();
             nh_ns = getMTPrivateNodeHandle();
@@ -662,6 +672,7 @@ namespace zed_wrapper {
             nh_ns.getParam("point_cloud_topic", point_cloud_topic);
 
             nh_ns.getParam("odometry_topic", odometry_topic);
+            nh_ns.getParam("pose_topic", odometry_topic);
 
             nh_ns.param<std::string>("svo_filepath", svo_filepath, std::string());
 
@@ -734,6 +745,8 @@ namespace zed_wrapper {
             //Odometry publisher
             pub_odom = nh.advertise<nav_msgs::Odometry>(odometry_topic, 1);
             NODELET_INFO_STREAM("Advertized on topic " << odometry_topic);
+            pub_pose = nh.advertise<geometry_msgs::PoseStamped>(pose_topic, 1);
+            NODELET_INFO_STREAM("Advertized on topic " << pose_topic);
 
             device_poll_thread = boost::shared_ptr<boost::thread>
                     (new boost::thread(boost::bind(&ZEDWrapperNodelet::device_poll, this)));

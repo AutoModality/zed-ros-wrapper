@@ -598,7 +598,7 @@ namespace zed_wrapper {
             resolution = sl::RESOLUTION_HD720;
             quality = sl::DEPTH_MODE_PERFORMANCE;
             sensing_mode = sl::SENSING_MODE_STANDARD;
-            rate = 30;
+            rate = 60;
             gpu_id = -1;
             zed_id = 0;
             odometry_DB = "";

@@ -664,8 +664,8 @@ namespace zed_wrapper {
             cloud_frame_id = "/zed_current_frame";
 
             string odometry_topic = "odom";
-            odometry_world_frame_id = "/zed_initial_frame";
-            odometry_camera_frame_id = "/zed_FRD";
+            odometry_world_frame_id = "/zed_fixed_FLU";
+            odometry_camera_frame_id = "/zed_relative_FLU";
             odometry_transform_frame_id = "/zed_current_frame";
             string pose_world_topic = "pose_world";
             string pose_camera_topic = "pose_camera";
